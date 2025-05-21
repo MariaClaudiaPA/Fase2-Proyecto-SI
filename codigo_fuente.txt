@@ -1,0 +1,203 @@
+import pandas as pd
+df = pd.read_csv('/content/DATASET_PROYECTO.csv')
+display(df.head(1000))
+print(df.info())
+print("""
+Descripción rápida de las columnas:
+- Branch: Sucursal (A, B, C)
+- Date: Fecha de la venta
+- Unit price: Precio unitario del producto
+- Tax 5%: Impuesto aplicado
+- Product line: Línea de producto
+- Customer type: Tipo de cliente (Member o Normal)
+- Gender: Género del cliente
+- Payment: Método de pago
+- Quantity: Cantidad vendida (variable objetivo)
+""")
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+df['Branch'] = df['Branch'].map({'A': 'Yangon', 'B': 'Mandalay', 'C': 'Naypyitaw'})
+df['Date']   = pd.to_datetime(df['Date'], errors='coerce')
+df['Day']    = df['Date'].dt.day
+df['Month']  = df['Date'].dt.month
+features = ['Unit price', 'Tax 5%', 'Day', 'Month',
+            'Product line', 'Branch', 'Customer type', 'Gender', 'Payment']
+target   = 'Quantity'
+categorical_features = ['Product line', 'Branch', 'Customer type', 'Gender', 'Payment']
+numeric_features     = ['Unit price', 'Tax 5%', 'Day', 'Month']
+preprocessor = ColumnTransformer([
+    ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_features),
+    ('num', StandardScaler(), numeric_features)
+])
+X_processed = preprocessor.fit_transform(df[features])
+print("Shape antes :", df[features].shape)
+print("Shape después:", X_processed.shape)
+import numpy as np
+cat_ohe_cols = preprocessor.named_transformers_['cat'].get_feature_names_out(categorical_features)
+num_cols     = numeric_features
+processed_cols = np.concatenate([cat_ohe_cols, num_cols])
+df_processed = pd.DataFrame(X_processed, columns=processed_cols)
+display(df_processed.head(1000))
+print(f"DataFrame procesado shape: {df_processed.shape}")
+print(df_processed.describe().T)
+import matplotlib.pyplot as plt
+import seaborn as sns
+print(df.isna().sum())
+print(df.describe())
+plt.figure(figsize=(10,6))
+sns.heatmap(df.corr(numeric_only=True), annot=True, fmt=".2f")
+plt.title("Matriz de correlación")
+plt.show()
+fig, axes = plt.subplots(1, 2, figsize=(12,4))
+sns.histplot(df['Quantity'], kde=True, ax=axes[0])
+axes[0].set_title("Distribución de Quantity")
+sns.boxplot(data=df, x='Product line', y='Quantity', ax=axes[1])
+axes[1].set_title("Quantity por línea de producto")
+plt.xticks(rotation=45)
+plt.show()
+from sklearn.svm import SVR
+from sklearn.metrics import mean_squared_error, r2_score
+import numpy as np
+target = 'Quantity'
+y = df[target]
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X_processed, y, test_size=0.2, random_state=42)
+svr = SVR(kernel='rbf', C=10, epsilon=0.1)
+svr.fit(X_train, y_train)
+y_pred_svr = svr.predict(X_test)
+rmse_svr = np.sqrt(mean_squared_error(y_test, y_pred_svr))
+r2_svr = r2_score(y_test, y_pred_svr)
+print(f"SVR RMSE: {rmse_svr:.2f}")
+print(f"SVR R²: {r2_svr:.2%}")
+plt.scatter(y_test, y_pred_svr, alpha=0.5)
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
+plt.xlabel("Valores Reales")
+plt.ylabel("Predicciones SVR")
+plt.title("SVR: Predicciones vs Valores Reales")
+plt.show()
+errores = y_test - y_pred_svr
+sns.histplot(errores, kde=True)
+plt.title("SVR: Distribución de Errores")
+plt.show()
+from sklearn.neighbors import KNeighborsRegressor
+target = 'Quantity'
+y = df[target]
+knn = KNeighborsRegressor(n_neighbors=5, weights='distance')
+knn.fit(X_train, y_train)
+y_pred_knn = knn.predict(X_test)
+rmse_knn = np.sqrt(mean_squared_error(y_test, y_pred_knn))
+r2_knn = r2_score(y_test, y_pred_knn)
+print(f"KNN RMSE: {rmse_knn:.2f}")
+print(f"KNN R²: {r2_knn:.2%}")
+plt.scatter(y_test, y_pred_knn, alpha=0.5)
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
+plt.xlabel("Valores Reales")
+plt.ylabel("Predicciones KNN")
+plt.title("KNN: Predicciones vs Valores Reales")
+plt.show()
+errores = y_test - y_pred_knn
+sns.histplot(errores, kde=True)
+plt.title("KNN: Distribución de Errores")
+plt.show()
+from sklearn.tree import DecisionTreeRegressor
+target = 'Quantity'
+y = df[target]
+dt = DecisionTreeRegressor(max_depth=5, min_samples_split=5)
+dt.fit(X_train, y_train)
+y_pred_dt = dt.predict(X_test)
+rmse_dt = np.sqrt(mean_squared_error(y_test, y_pred_dt))
+r2_dt = r2_score(y_test, y_pred_dt)
+print(f"Decision Tree RMSE: {rmse_dt:.2f}")
+print(f"Decision Tree R²: {r2_dt:.2%}")
+plt.scatter(y_test, y_pred_dt, alpha=0.5)
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
+plt.xlabel("Valores Reales")
+plt.ylabel("Predicciones Decision Tree")
+plt.title("Decision Tree: Predicciones vs Valores Reales")
+plt.show()
+errores = y_test - y_pred_dt
+sns.histplot(errores, kde=True)
+plt.title("Decision Tree: Distribución de Errores")
+plt.show()
+from sklearn.model_selection import GridSearchCV
+import joblib
+param_grid = {
+    'SVR': {'C': [1, 10, 100], 'epsilon': [0.1, 0.5], 'kernel': ['rbf']},
+    'KNN': {'n_neighbors': [3, 5, 7], 'weights': ['uniform', 'distance']},
+    'DecisionTree': {'max_depth': [3, 5, 7], 'min_samples_split': [2, 5]}
+}
+best_models = {
+    'SVR': GridSearchCV(SVR(), param_grid['SVR'], cv=5, scoring='neg_mean_squared_error'),
+    'KNN': GridSearchCV(KNeighborsRegressor(), param_grid['KNN'], cv=5, scoring='neg_mean_squared_error'),
+    'DecisionTree': GridSearchCV(DecisionTreeRegressor(), param_grid['DecisionTree'], cv=5, scoring='neg_mean_squared_error')
+}
+rmse_scores = {}
+r2_scores = {}
+for name, model in best_models.items():
+    print(f"\n⚙️ Entrenando y evaluando {name}...")
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    r2 = r2_score(y_test, y_pred)
+    print(f"Mejores parámetros {name}: {model.best_params_}")
+    print(f"{name} RMSE: {rmse:.2f}")
+    print(f"{name} R²: {r2:.2%}")
+    plt.figure(figsize=(6,4))
+    plt.scatter(y_test, y_pred, alpha=0.5)
+    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
+    plt.xlabel("Valores Reales")
+    plt.ylabel(f"Predicciones {name}")
+    plt.title(f"{name}: Predicciones vs Valores Reales")
+    plt.show()
+    errores = y_test - y_pred
+    sns.histplot(errores, kde=True)
+    plt.title(f"{name}: Distribución de Errores")
+    plt.show()
+    rmse_scores[name] = rmse
+    r2_scores[name] = r2
+fig, ax = plt.subplots(1, 2, figsize=(12,5))
+sns.barplot(x=list(rmse_scores.keys()), y=list(rmse_scores.values()), ax=ax[0])
+ax[0].set_title("Comparación RMSE (menor es mejor)")
+ax[0].set_ylabel("RMSE")
+sns.barplot(x=list(r2_scores.keys()), y=list(r2_scores.values()), ax=ax[1])
+ax[1].set_title("Comparación R² (mayor es mejor)")
+ax[1].set_ylabel("R²")
+plt.show()
+best_name = min(rmse_scores, key=rmse_scores.get)
+best_model = best_models[best_name].best_estimator_
+joblib.dump(best_model, 'mejor_modelo.joblib')
+print(f"\n🏆 Mejor modelo guardado: {best_name} con RMSE {rmse_scores[best_name]:.2f}")
+!pip install gradio scikit-learn pandas numpy joblib
+import gradio as gr
+modelo_final = joblib.load('mejor_modelo.joblib')
+def predecir_ventas(unit_price, tax, day, month, product_line, branch, customer_type, gender, payment):
+    try:
+        if not (0 <= day <= 31) or not (1 <= month <= 12):
+            raise ValueError("Día/Mes fuera de rango")
+        input_data = pd.DataFrame([[
+            unit_price, tax, day, month,
+            product_line, branch, customer_type, gender, payment
+        ]], columns=features)
+        processed_input = preprocessor.transform(input_data)
+        prediccion = modelo_final.predict(processed_input)[0]
+        return round(prediccion, 2)
+    except Exception as e:
+        return str(e)
+interfaz = gr.Interface(
+    fn=predecir_ventas,
+    inputs=[
+        gr.Number(label="Precio Unitario"),
+        gr.Number(label="Tax 5%"),
+        gr.Number(label="Día (1-31)"),
+        gr.Number(label="Mes (1-12)"),
+        gr.Dropdown(choices=df['Product line'].unique().tolist(), label="Línea de Producto"),
+        gr.Dropdown(choices=['Yangon', 'Mandalay', 'Naypyitaw'], label="Sucursal"),
+        gr.Dropdown(choices=df['Customer type'].unique().tolist(), label="Tipo de Cliente"),
+        gr.Dropdown(choices=df['Gender'].unique().tolist(), label="Género"),
+        gr.Dropdown(choices=df['Payment'].unique().tolist(), label="Método de Pago"),
+    ],
+    outputs="number",
+    title="Predicción de Cantidad de Productos Vendidos",
+    description="Ingrese las características para predecir la cantidad vendida."
+)
+interfaz.launch()
