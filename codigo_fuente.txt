@@ -134,7 +134,7 @@ best_models = {
 rmse_scores = {}
 r2_scores = {}
 for name, model in best_models.items():
-    print(f"\n⚙️ Entrenando y evaluando {name}...")
+    print(f"\n Entrenando y evaluando {name}...")
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
@@ -166,7 +166,7 @@ plt.show()
 best_name = min(rmse_scores, key=rmse_scores.get)
 best_model = best_models[best_name].best_estimator_
 joblib.dump(best_model, 'mejor_modelo.joblib')
-print(f"\n🏆 Mejor modelo guardado: {best_name} con RMSE {rmse_scores[best_name]:.2f}")
+print(f"\nMejor modelo guardado: {best_name} con RMSE {rmse_scores[best_name]:.2f}")
 !pip install gradio scikit-learn pandas numpy joblib
 import gradio as gr
 modelo_final = joblib.load('mejor_modelo.joblib')
